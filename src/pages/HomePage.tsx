@@ -97,7 +97,7 @@ export default function HomePage() {
         className="text-center space-y-5 py-10"
       >
         <h1 className="text-4xl md:text-5xl font-bold text-[#e2b04a] tracking-wide font-['Crimson_Text']">
-          线性代数学习之旅
+          你应该怎样理解线代
         </h1>
         <p className="text-[#e0d8c8]/70 text-lg max-w-2xl mx-auto leading-relaxed">
           每一步建立在上一步之上，九步递进，从行列式出发，穿越矩阵运算、方程组求解、特征值理论，
