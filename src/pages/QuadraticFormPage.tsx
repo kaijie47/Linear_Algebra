@@ -8,9 +8,14 @@ import KnowledgeDetail from '@/components/ui/KnowledgeDetail'
 import { useProgressStore } from '@/store/progressStore'
 import { cn } from '@/lib/utils'
 import type { Matrix, CalculationStep } from '@/types'
-import { isZero, cloneMatrix, roundMatrix } from '@/engine/matrix'
+import { parseQuadraticForm, standardizeByCompletingWithCalcSteps } from '@/engine/quadratic'
 
 type Method = 'orthogonal' | 'completing-square'
+
+function fmt(n: number): string {
+  if (Number.isInteger(n)) return String(n)
+  return n.toFixed(4)
+}
 
 function orthogonalStandardize(A: Matrix): {
   standardForm: string
@@ -23,59 +28,57 @@ function orthogonalStandardize(A: Matrix): {
 
   steps.push({
     title: '二次型矩阵',
-    math: `A = \\begin{pmatrix} ${A.map(r => r.join(' & ')).join(' \\\\\\\\ ')} \\end{pmatrix}`,
-    description: `二次型 f = xᵀAx 的矩阵表示`,
+    math: `A = \\begin{pmatrix} ${A.map(r => r.map(v => fmt(v)).join(' & ')).join(' \\\\\\\\ ')} \\end{pmatrix}`,
+    description: '二次型 f = xᵀAx 的矩阵表示',
   })
 
-  if (n === 2) {
-    const a = A[0][0], b = A[0][1], c = A[1][1]
-    const trace = a + c
-    const det = a * c - b * b
-    const discriminant = trace * trace - 4 * det
-    const sqrtD = Math.sqrt(Math.max(0, discriminant))
-    const lambda1 = (trace + sqrtD) / 2
-    const lambda2 = (trace - sqrtD) / 2
-
-    let poly = `|A - \\lambda I| = \\begin{vmatrix} ${a} - \\lambda & ${b} \\\\\\\\ ${b} & ${c} - \\lambda \\end{vmatrix}`
-    poly += ` = \\lambda^2 - ${trace}\\lambda + ${det} = 0`
-    steps.push({ title: '特征方程', math: poly, description: '计算特征多项式' })
-
-    steps.push({
-      title: '特征值',
-      math: `\\lambda_1 = ${lambda1.toFixed(4)}, \\quad \\lambda_2 = ${lambda2.toFixed(4)}`,
-      description: '两个实特征值（对称矩阵保证）',
-    })
-
-    const vec1 = getNormalizedEigenvector2(A, lambda1)
-    const vec2 = getNormalizedEigenvector2(A, lambda2)
-
-    const orthoCheck = vec1[0] * vec2[0] + vec1[1] * vec2[1]
-    const Q: Matrix = [[vec1[0], vec2[0]], [vec1[1], vec2[1]]]
-
-    steps.push({
-      title: '正交矩阵 Q',
-      math: `Q = \\begin{pmatrix} ${Q.map(r => r.map(v => v.toFixed(4)).join(' & ')).join(' \\\\\\\\ ')} \\end{pmatrix}`,
-      description: `特征向量正交性检验: ${orthoCheck.toFixed(10)} ≈ 0`,
-    })
-
-    const standardForm = `f = ${lambda1.toFixed(4)} y_1^2 + ${lambda2.toFixed(4)} y_2^2`
-
-    steps.push({
-      title: '标准型',
-      math: standardForm,
-      description: '通过正交变换 x = Qy，二次型化为标准型',
-    })
-
-    return {
-      standardForm,
-      eigenvalues: [lambda1, lambda2],
-      orthogonalMatrix: Q,
-      steps,
-    }
+  if (n !== 2) {
+    steps.push({ title: '提示', math: '', description: '当前仅支持2阶矩阵的正交变换演示' })
+    return { standardForm: '', eigenvalues: [], steps }
   }
 
-  steps.push({ title: '提示', math: '', description: '3阶及以上矩阵请使用数值方法或以 2阶对称矩阵为例' })
-  return { standardForm: '', eigenvalues: [], steps }
+  const a = A[0][0], b = A[0][1], c = A[1][1]
+  const trace = a + c
+  const det = a * c - b * b
+  const discriminant = trace * trace - 4 * det
+  const sqrtD = Math.sqrt(Math.max(0, discriminant))
+  const lambda1 = (trace + sqrtD) / 2
+  const lambda2 = (trace - sqrtD) / 2
+
+  let poly = `|A - \\lambda I| = \\begin{vmatrix} ${a} - \\lambda & ${b} \\\\\\\\ ${b} & ${c} - \\lambda \\end{vmatrix}`
+  poly += ` = \\lambda^2 - ${trace}\\lambda + ${det} = 0`
+  steps.push({ title: '特征方程', math: poly, description: '计算特征多项式' })
+
+  steps.push({
+    title: '特征值',
+    math: `\\lambda_1 = ${fmt(lambda1)}, \\quad \\lambda_2 = ${fmt(lambda2)}`,
+    description: '对称矩阵保证特征值为实数',
+  })
+
+  const vec1 = getNormalizedEigenvector2(A, lambda1)
+  const vec2 = getNormalizedEigenvector2(A, lambda2)
+
+  const orthoCheck = vec1[0] * vec2[0] + vec1[1] * vec2[1]
+  const Q: Matrix = [
+    [vec1[0], vec2[0]],
+    [vec1[1], vec2[1]],
+  ]
+
+  steps.push({
+    title: '正交矩阵 Q',
+    math: `Q = \\begin{pmatrix} ${Q.map(r => r.map(v => fmt(v)).join(' & ')).join(' \\\\\\\\ ')} \\end{pmatrix}`,
+    description: `正交性检验: v₁·v₂ = ${fmt(orthoCheck)} ≈ 0 ✓`,
+  })
+
+  const standardForm = `f = ${fmt(lambda1)} y_1^2 + ${fmt(lambda2)} y_2^2`
+
+  steps.push({
+    title: '标准型',
+    math: standardForm,
+    description: '通过正交变换 x = Qy 化为标准型',
+  })
+
+  return { standardForm, eigenvalues: [lambda1, lambda2], orthogonalMatrix: Q, steps }
 }
 
 function getNormalizedEigenvector2(A: Matrix, lambda: number): number[] {
@@ -86,10 +89,10 @@ function getNormalizedEigenvector2(A: Matrix, lambda: number): number[] {
 
   let v1: number, v2: number
 
-  if (!isZero(a01)) {
+  if (Math.abs(a01) > 1e-10) {
     v1 = 1
     v2 = -a00 / a01
-  } else if (!isZero(a11)) {
+  } else if (Math.abs(a11) > 1e-10) {
     v1 = -a01 / a11
     v2 = 1
   } else {
@@ -98,50 +101,7 @@ function getNormalizedEigenvector2(A: Matrix, lambda: number): number[] {
   }
 
   const norm = Math.sqrt(v1 * v1 + v2 * v2)
-  return isZero(norm) ? [1, 0] : [v1 / norm, v2 / norm]
-}
-
-function completingSquareStandardize(expr: string): {
-  standardForm: string
-  steps: CalculationStep[]
-} {
-  const steps: CalculationStep[] = []
-
-  steps.push({
-    title: '输入表达式',
-    math: `f = ${expr}`,
-    description: '配方法标准化',
-  })
-
-  steps.push({
-    title: '配方过程',
-    math: '配方法',
-    description: '配方方法: 对所输入的二元二次型，逐次配方消去交叉项。具体过程在引擎中完成。',
-  })
-
-  steps.push({
-    title: '配方法结果',
-    math: '标准型由引擎计算得出',
-    description: '需实现完整的配方法引擎',
-  })
-
-  return {
-    standardForm: '配方法需要完整表达式解析引擎',
-    steps,
-  }
-}
-
-function parseExpression(expr: string): Matrix | null {
-  const trimmed = expr.trim()
-  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-    try {
-      const clean = trimmed.replace(/[\[\]]/g, '').split(';').map(s => s.split(',').map(Number))
-      return clean.length === clean[0].length ? clean : null
-    } catch {
-      return null
-    }
-  }
-  return null
+  return norm < 1e-10 ? [1, 0] : [v1 / norm, v2 / norm]
 }
 
 export default function QuadraticFormPage() {
@@ -166,12 +126,17 @@ export default function QuadraticFormPage() {
     if (method === 'orthogonal') {
       setResult(orthogonalStandardize(matrix))
     } else {
-      const parsed = parseExpression(expression)
-      if (parsed) {
-        setResult(orthogonalStandardize(parsed))
+      let mat: Matrix
+      if (expression.trim().startsWith('[')) {
+        const clean = expression.trim().replace(/[\[\]]/g, '').split(';').map(s => s.split(',').map(Number))
+        mat = clean
       } else {
-        setResult(completingSquareStandardize(expression))
+        const parsed = parseQuadraticForm(expression)
+        mat = parsed.matrix
       }
+
+      const { standardForm, calcSteps } = standardizeByCompletingWithCalcSteps(mat)
+      setResult({ standardForm, steps: calcSteps })
     }
   }
 
@@ -224,7 +189,7 @@ export default function QuadraticFormPage() {
               className="text-center relative z-10 bg-[#1a1a2e]/90 backdrop-blur rounded-2xl border-2 border-[#e2b04a] p-8 glow-gold"
             >
               <div className="text-5xl mb-4">🎉</div>
-              <h2 className="text-3xl font-bold text-gold font-serif mb-2">恭喜完成全部学习！</h2>
+              <h2 className="text-3xl font-bold text-[#e2b04a] font-serif mb-2">恭喜完成全部学习！</h2>
               <p className="text-gray-300">你已经掌握了二次型标准化的全部内容</p>
               <p className="text-[#4ecdc4] mt-2">✦ 线性代数学习之旅圆满结束 ✦</p>
             </motion.div>
@@ -237,7 +202,7 @@ export default function QuadraticFormPage() {
           <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[#4ecdc4]/20 text-[#4ecdc4]">
             第9步 · 最终目标
           </span>
-          <h1 className="text-3xl font-bold text-gold">化二次型为标准型</h1>
+          <h1 className="text-3xl font-bold text-[#e2b04a]">化二次型为标准型</h1>
         </div>
         <p className="text-gray-400 max-w-2xl">
           这是线性代数学习的终极目标 —— 通过正交变换法或配方法，将二次型化为标准型
@@ -305,14 +270,16 @@ export default function QuadraticFormPage() {
           {method === 'orthogonal' ? (
             <div className="space-y-4">
               <p className="text-sm text-gray-400">输入二次型矩阵 A（对称矩阵）：f = xᵀAx</p>
-              <MatrixInput matrix={matrix} onChange={setMatrix} minSize={2} maxSize={3} label="二次型矩阵 A" />
+              <MatrixInput matrix={matrix} onChange={setMatrix} minSize={2} maxSize={2} label="二次型矩阵 A" />
             </div>
           ) : (
             <div className="space-y-4">
               <p className="text-sm text-gray-400">
-                输入二次型表达式，支持格式如：
+                输入二次型表达式（支持二元或三元）：
                 <br />
                 <code className="text-[#4ecdc4]">x1^2 + 2*x1*x2 + 3*x2^2</code>
+                <br />
+                <code className="text-[#4ecdc4]">x1^2 + 2*x1*x2 + 2*x1*x3 + 2*x2^2 + 4*x2*x3 + 4*x3^2</code>
                 <br />
                 或矩阵格式：<code className="text-[#4ecdc4]">[5,2;2,3]</code>
               </p>
@@ -334,7 +301,7 @@ export default function QuadraticFormPage() {
             onClick={handleCalculate}
             className="w-full py-3 rounded-lg bg-gradient-to-r from-[#e2b04a] to-[#f0c060] text-[#1a1a2e] font-semibold hover:from-[#e2b04a]/90 hover:to-[#f0c060]/90 transition-all active:scale-[0.98] shadow-lg"
           >
-            标准化
+            {method === 'orthogonal' ? '正交标准化' : '配方标准化'}
           </button>
         </div>
 
@@ -355,7 +322,7 @@ export default function QuadraticFormPage() {
                     <div className="flex flex-wrap gap-3">
                       {result.eigenvalues.map((lambda, i) => (
                         <span key={i} className="px-3 py-1 rounded-full bg-[#e2b04a]/20 text-[#e2b04a] text-sm font-semibold">
-                          λ{i + 1} = {lambda.toFixed(4)}
+                          λ{i + 1} = {fmt(lambda)}
                         </span>
                       ))}
                     </div>
@@ -366,10 +333,10 @@ export default function QuadraticFormPage() {
                   <div className="space-y-2">
                     <h3 className="text-sm text-gray-400">正交变换矩阵 Q</h3>
                     <MathRenderer
-                      math={`Q = \\begin{pmatrix} ${result.orthogonalMatrix.map(r => r.map(v => v.toFixed(4)).join(' & ')).join(' \\\\\\\\ ')} \\end{pmatrix}`}
+                      math={`Q = \\begin{pmatrix} ${result.orthogonalMatrix.map(r => r.map(v => fmt(v)).join(' & ')).join(' \\\\\\\\ ')} \\end{pmatrix}`}
                       displayMode
                     />
-                    <p className="text-sm text-gray-400 text-center pt-5">令 x = Qy，则 f = λ₁y₁² + λ₂y₂² + ...</p>
+                    <p className="text-sm text-gray-400 text-center pt-5">令 x = Qy，则 f = λ₁y₁² + λ₂y₂²</p>
                   </div>
                 )}
               </motion.div>

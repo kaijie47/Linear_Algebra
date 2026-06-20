@@ -376,7 +376,7 @@ export default function HomePage() {
           </h3>
           <p className="text-sm text-[#e0d8c8]/60 leading-relaxed">
             恭喜！你已经完成了线性代数全部九个知识模块的学习。
-            从行列式的计算到二次型的标准化，你对矩阵的理解已经达到了一个新的高度。
+            都是150分的苗子!
           </p>
         </motion.div>
       )}
